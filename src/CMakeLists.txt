@@ -5,7 +5,7 @@ INCLUDE_DIRECTORIES(
 
 ## Set common link libraries
 SET(COMMON_LIBS 
-${OpenCV_LIBS}
+gtsam
 )
 
 ## Main executables

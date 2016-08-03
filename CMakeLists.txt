@@ -19,7 +19,10 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 
 
 # find packages
-find_package(gtsam REQUIRED)
+	find_package(Eigen3 REQUIRED)
+	include_directories(AFTER "${EIGEN3_INCLUDE_DIR}")
+find_package(GTSAM REQUIRED)
+
 
 # enable SSE2 instructions for dlib
 SET(DUSE_SSE2_INSTRUCTIONS ON)

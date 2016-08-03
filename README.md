@@ -32,11 +32,18 @@ cmake .. -G "Visual Studio 14 2015 Win64" -DCMAKE_INSTALL_PREFIX="C:\lib\gtsam-3
 
 ## Build project
 
-
-
+**Win 7**
 
 ```
 mdir build
 cd build
 cmake .. -G "Visual Studio 14 2015 Win64"
+```
+
+**Eclipse**
+
+```
+mdir build
+cd build
+cmake .. -G "Eclipse CDT4 - Unix Makefiles"
 ```
