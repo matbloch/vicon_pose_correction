@@ -1,7 +1,20 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% @title: Signal Alignment Tool for Vicon Measurements with ROS
+% @author: Matthias Bloch
+% @version: 1.0
+% 
+% README:
+% .csv file containing pose estimation:
+% column format: [X,Y,Z,RotX,RotY,RotZ,W]
+% X,Y,Z: Position
+% RotX,RotY,RotZ,W: Angle Axis
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 close all;
 clear;
 clc;
-
 %% =============================================
 %%      select paths
 
@@ -12,6 +25,20 @@ viconFile = [filepath,filename];
 % load pose logs
 [filename,filepath] = uigetfile('*.csv','Select the pose estimations');
 poseEstimationFile = [filepath,filename];
+
+%% =============================================
+%%      select signal scaling
+
+vicon_scale = input('Please enter the position scaling of the Vicon measurements (signal *= s, []: s=1): ');
+if (isempty(vicon_scale) == 1) || vicon_scale == 0
+    vicon_scale = 1;
+end
+
+estimation_scale = input('Please enter the position scaling of the Pose estimation (signal *= s, []: s=1): ');
+if (isempty(estimation_scale) == 1) || estimation_scale == 0
+    estimation_scale = 1;
+end
+
 %% =============================================
 %%      load vicon data
 
@@ -34,34 +61,87 @@ else
 end
 
 vicon_select = select(bag,'Topic',topics(topic_nr)); 
+
 %% =============================================
-%%      extract timeseries and plot
+%%      select alignment channel
+
+channels = {'X', 'Y', 'Z'};
+ok = 0;
+while ok ~= 1
+[alignment_channel_nr,ok] = listdlg('PromptString','Select the axis on which you want to align the signals:',...
+                'SelectionMode','single',...
+                'ListString',channels);
+    if ok ~= 1
+        disp('Please select the Vicon topic');
+    end
+end
+
+fprintf('Perform alignment along the %s-axis \n', channels{1,alignment_channel_nr});
+
+%% =============================================
+%%      extract timeseries and plot (alignment axis only)
 
 disp('Building Vicon timeseries...');
-ts = timeseries(vicon_select, 'Transform.Translation.X', 'Transform.Translation.Y', 'Transform.Translation.Z');
+
+% geometry_msgs/TransformStamped topics
+% TransformStamped_topics = { ...
+%     'Transform.Translation.X', ...
+%     'Transform.Translation.Y', ...
+%     'Transform.Translation.Z', ...
+%     'Transform.Rotation.X', ...
+%     'Transform.Rotation.Y', ...
+%     'Transform.Rotation.Z', ...
+%     'Transform.Rotation.W' ...
+% };
+% 
+% ts = timeseries(vicon_select, TransformStamped_topics{1,alignment_channel_nr});
+
+% load total transformation
+ts = timeseries(vicon_select, ...
+'Transform.Translation.X', ...
+'Transform.Translation.Y', ...
+'Transform.Translation.Z', ...
+'Transform.Rotation.X', ...
+'Transform.Rotation.Y', ...
+'Transform.Rotation.Z', ...
+'Transform.Rotation.W' ...
+);
+
+% scale position
+ts.Data(:,1:3) = ts.Data(:,1:3) * vicon_scale;
+
+% ts.TimeInfo.Units = 'seconds';
 
 selection_ok = 0;
 while selection_ok ~= 1
     
     % display original
-    plot(ts, 'LineWidth', 3)
+
+%     plot(get(ts.Data(), 'Transform.Translation.X'), 'LineWidth', 3)
+    plot(ts.Time, ts.Data(:,alignment_channel_nr))
     
     disp('Please select the region of interest of the Vicon data...');
     
-    % extract region
+    % select region to extract
     disp('Extracting ROI...');
     [x, y] = ginput(2);
     
-    start_time = x(1);
-    end_time = x(2);
-    if x(2) < x(1)
-        start_time = x(2);
-        end_time = x(1);
+    % reselect
+    while x(1) == x(2)
+        [x, y] = ginput(2);
     end
     
-    ts_extracted = getsampleusingtime(ts,start_time,end_time);
+    start_time_vicon = x(1);
+    end_time_vicon = x(2);
+    if x(2) < x(1)
+        start_time_vicon = x(2);
+        end_time_vicon = x(1);
+    end
     
-    plot(ts_extracted, 'LineWidth', 3)
+    % crop signal
+    ts_extracted = getsampleusingtime(ts,start_time_vicon,end_time_vicon);
+    % display
+    plot(ts_extracted.Time, ts_extracted.Data(:,alignment_channel_nr), 'LineWidth', 3)
     title('Extracted Vicon timeseries')
 
     choice = questdlg('Would you like to reselect the region of interest?', ...
@@ -103,16 +183,19 @@ end
 %% =============================================
 %%      load csv file
 
-% filepath = fullfile(fileparts(which('align_signals')), 'data', 'VICON0805_20160805_173725_factor100_new.csv');
 tracker_data = csvread(poseEstimationFile);
+
+% scale position
+tracker_data(:,1:3) = estimation_scale * tracker_data(:,1:3);
 
 selection_ok = 0;
 
-figure % new figure window
+f = figure; % new figure window
+set(f,'name','Select pose estimation data range','numbertitle','off')
 while selection_ok ~= 1
     
     % display original
-    plot(tracker_data(:,1:3), 'LineWidth', 3)
+    plot(tracker_data(:,alignment_channel_nr), 'LineWidth', 3)
     
     disp('Please select the region of interest of the pose estimation data...');
     
@@ -120,8 +203,14 @@ while selection_ok ~= 1
     disp('Extracting ROI...');
     [x, y] = ginput(2);
     
-    start_time = x(1)
-    end_time = x(2)
+    start_time = x(1);
+    end_time = x(2);
+    
+    % reselect
+    while x(1) == x(2)
+        [x, y] = ginput(2);
+    end
+    
     if x(2) < x(1)
         start_time = x(2);
         end_time = x(1);
@@ -130,10 +219,10 @@ while selection_ok ~= 1
     start_time = floor(start_time);
     end_time = ceil(end_time);
     
-    tracker_data_extracted = tracker_data(start_time:end_time,1:3);
+    tracker_data_extracted = tracker_data(start_time:end_time,:);
     
-    plot(tracker_data_extracted, 'LineWidth', 3)
-    title('Extracted Vicon timeseries')
+    plot(tracker_data_extracted(:,alignment_channel_nr), 'LineWidth', 3)
+    title('Extracted pose estimation timeseries')
 
     choice = questdlg('Would you like to reselect the region of interest?', ...
         'ROI selection', ...
@@ -156,8 +245,8 @@ end
 %%      select fitting channel
 
 % select fitting channel
-vicon_dim = ts_extracted.Data(:,3);
-tracker_dim = tracker_data_extracted(:,3);
+vicon_dim = ts_extracted.Data(:,alignment_channel_nr);
+tracker_dim = tracker_data_extracted(:,alignment_channel_nr);
 
 %% =============================================
 %%      filtering/smoothing
@@ -274,15 +363,15 @@ if lagDiff > 0
     salign = slong(lagDiff+1:end);  % == vicon
     if numel(vicon_dim) > numel(tracker_dim)
         % slong = vicon_dim
-        orig = 'Pose estimate';
-        aligned = 'Vicon';
+        orig = 'Pose estimation';
+        aligned = 'Vicon measurement';
         first_clr = 'r';
         second_clr = 'b';
 
     else
         % slong = tracker_dim
         orig = 'Vicon measurement';
-        aligned = 'Pose estimate';
+        aligned = 'Pose estimation';
         first_clr = 'b';
         second_clr = 'r';
         tracker_data_shifted = 1;
@@ -293,14 +382,14 @@ else
     if numel(vicon_dim) > numel(tracker_dim)
         % sshort = tracker_dim
         orig = 'Vicon measurement';
-        aligned = 'Pose estimate';
+        aligned = 'Pose estimation';
         first_clr = 'b';
         second_clr = 'r';
         tracker_data_shifted = 1;
     else
         % sshort = vicon_dim
-        orig = 'Pose estimate';
-        aligned = 'Vicon';
+        orig = 'Pose estimation';
+        aligned = 'Vicon measurement';
         first_clr = 'r';
         second_clr = 'b';
     end
@@ -309,7 +398,8 @@ end
 %% =============================================
 %%      display sub results (resample results)
 
-figure % new figure window
+f = figure; % new figure window
+set(f,'name','Aligned zero mean signals','numbertitle','off')
 hold on
 plot(sorig, first_clr)
 % findpeaks(sorig)
@@ -323,44 +413,55 @@ legend(orig,aligned,'Location','northwest')
 
 %% =============================================
 %%      calculate all shifted signals
-vicon_data_new = ts_extracted.Data(:,1:3);
+
+% reload vicon data - now load all topics
+
+% ts = timeseries(vicon_select, ...
+% 'Transform.Translation.X', ...
+% 'Transform.Translation.Y', ...
+% 'Transform.Translation.Z', ...
+% 'Transform.Rotation.X', ...
+% 'Transform.Rotation.Y', ...
+% 'Transform.Rotation.Z', ...
+% 'Transform.Rotation.W' ...
+% );
+% ts_extracted = getsampleusingtime(ts,start_time_vicon,end_time_vicon);
+    
+vicon_data_new = ts_extracted.Data(:,:);
+% resample tracker signal
 tracker_data_new = resample(tracker_data_extracted,fs_vicon,fs_tracker);
 
 if lagDiff > 0
     if tracker_data_shifted == 1
         tracker_data_new = tracker_data_new(lagDiff+1:end,:);
-        disp('shift tracker +')
     else
-        disp('shift vicon +')
         vicon_data_new = vicon_data_new(lagDiff+1:end,:);
     end
 else
     if tracker_data_shifted == 1
-        disp('shift tracker -')
         tracker_data_new = tracker_data_new(-lagDiff+1:end,:);
     else
-        disp('shift vicon -')
         vicon_data_new = vicon_data_new(-lagDiff+1:end,:);
     end
 end
 
-figure % new figure window
+% display shifted/aligned signals
+f = figure; % new figure window
+set(f,'name','Aligned signals','numbertitle','off')
 hold on
-plot(tracker_data_new(:,3)/10)
+plot(tracker_data_new(:,3)) %% todo: scaling factor
 % findpeaks(sorig)
 plot(vicon_data_new(:,3))
 % findpeaks(salign)
 xlim([0 mx+1])
-title('Prealigned signals')
+title('Aligned signals')
 ylabel('Z-Axis [m]');
 xlabel('Time')
-legend('tracker','vicon','Location','northwest')
+legend('Pose estimation','Vicon measurement','Location','northwest')
 
-return
+%% =============================================
+%%      save results
 
-
-
-% saving dialog
 choice = questdlg('Would to exit now and save the results?', ...
     'Exit and save aligned signals', ...
     'Save and Exit','Continue', 'cancel');
@@ -374,27 +475,91 @@ switch choice
 %         disp('Reselection ROI...');
 end
 
+
 %% =============================================
 %%      save data
 
-if save_and_exit
+if save_and_exit == 1
+   
+    selection_ok = 0;
+    %% =============================================
+    %%      limit the signal extend
+    f = figure; % new figure window
+    set(f,'name','Select region to save','numbertitle','off');
+    while selection_ok ~= 1
     
-    % add 
+        % display original
+        plot(tracker_data_new(:,1:3)) %% todo: scaling factor
+        hold on
+        % findpeaks(sorig)
+        plot(vicon_data_new(:,1:3))
+        % findpeaks(salign)
+        xlim([0 mx+1])
+        title('Aligned signals')
+        ylabel('Z-Axis [m]');
+        xlabel('Time')
+        legend('Pose estimation','Vicon measurement','Location','northwest')
+        hold off
+
+        % extract region
+        disp('Selecting the signal range to save...');
+        [x, y] = ginput(2);
     
-    sorig = sorig + tracker_mean;
+        start_time = x(1);
+        end_time = x(2);
+        if x(2) < x(1)
+            start_time = x(2);
+            end_time = x(1);
+        end
+        
+        start_time = floor(start_time);
+        end_time = ceil(end_time);
+
+        tracker_data_extracted = tracker_data_new(start_time:end_time,:);
+        vicon_data_extracted = vicon_data_new(start_time:end_time,:);
+        
+        % plot extracted region
+        plot(tracker_data_extracted(:,1:3)) %% todo: scaling factor
+        hold on
+        % findpeaks(sorig)
+        plot(vicon_data_extracted(:,1:3))
+        % findpeaks(salign)
+        xlim([0 mx+1])
+        title('Aligned signals')
+        ylabel('Position [m]');
+        xlabel('Time')
+        legend('tracker','vicon','Location','northwest')
+        hold off
+
+        choice = questdlg('Would you like to reselect the region to save?', ...
+            'Save region', ...
+            'Save','Reselect region to save', 'cancel');
+        % Handle response
+        switch choice
+            case 'Save'
+                selection_ok = 1;
+            case 'Reselect region to save'
+                disp('Reselection region to save...');
+            case 'cancel'
+                disp('Reselection region to save...');
+        end
+
+    end
+  
+    % crop
+    tracker_data_new = tracker_data_extracted;
+    vicon_data_new = vicon_data_extracted;
     
     filename = ['aligned_signals_',datestr(now, 'yyddmm-HHSS'),'.csv'];
-    min_index = min([numel(sorig),numel(salign)]);
-    fid=fopen(filename,'wt');
-    fprintf(fid,'%s,','Vicon');
-    fprintf(fid,'%s,','Pose estimation');
-    fclose(fid);
-    % vicon first, then pose estimation
-    if strcmp(first,'Vicon') == 1
-        dlmwrite (filename, [sorig(1:min_index,:),salign(1:min_index,:)], '-append');
-    else
-        dlmwrite (filename, [salign(1:min_index,:), sorig(1:min_index,:)], '-append');
-    end
+    min_index = min([size(tracker_data_new,1),size(vicon_data_new,1)]);
+    
+%     write titles
+%     fid=fopen(filename,'wt');
+%     fprintf(fid,'%s,','Vicon');
+%     fprintf(fid,'%s,','Pose estimation');
+%     fclose(fid);
+    
+    dlmwrite (filename, [vicon_data_new(1:min_index,:),tracker_data_new(1:min_index,:)], '-append');
 
     fprintf('saving aligned results to: "%s"\n', filename);
 end
@@ -478,7 +643,7 @@ end
 %% =============================================
 %%      save data
 % 
-% filename = ['aligned_signals_',datestr(now, 'yyddmm-HHSS'),'.csv'];
+% filename = ['aligned_signals_',datestr(now, 'yyddmm-HHMMSS'),'.csv'];
 % 
 % min_index = min([numel(sorig),numel(salign)]);
 % fid=fopen(filename,'wt');
