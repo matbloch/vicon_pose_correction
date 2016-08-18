@@ -298,13 +298,21 @@ end
 % get estimation sampling frequency
 fs_tracker = input('Please enter the sampling frequency of the pose estimation: ');
 
-% resample to same frequency
+% resample to same frequency (lower of both)
 if fs_vicon > fs_tracker
-    disp('Resampling pose estimation...');
-    tracker_dim = resample(tracker_dim,fs_vicon,fs_tracker);
-else
+    % disp('Resampling pose estimation...');
+	% [p,q] = rat(fs_vicon / fs_tracker)
+    % tracker_dim = resample(tracker_dim,p,q);
     disp('Resampling vicon measurement...');
-    vicon_dim = resample(vicon_dim,fs_tracker,fs_vicon);
+	[p,q] = rat(fs_tracker / fs_vicon);
+    vicon_dim = resample(vicon_dim,p,q);
+else
+    % disp('Resampling vicon measurement...');
+	% [p,q] = rat(fs_tracker / fs_vicon)
+    % vicon_dim = resample(vicon_dim,p,q);
+    disp('Resampling pose estimation...');
+	[p,q] = rat(fs_vicon / fs_tracker);
+    tracker_dim = resample(tracker_dim,p,q);
 end
 
 %% =============================================
@@ -427,9 +435,30 @@ legend(orig,aligned,'Location','northwest')
 % );
 % ts_extracted = getsampleusingtime(ts,start_time_vicon,end_time_vicon);
     
-vicon_data_new = ts_extracted.Data(:,:);
+	
 % resample tracker signal
-tracker_data_new = resample(tracker_data_extracted,fs_vicon,fs_tracker);
+% vicon_data_new = ts_extracted.Data(:,:);
+% tracker_data_new = resample(tracker_data_extracted,fs_vicon,fs_tracker);
+
+
+vicon_data_new = ts_extracted.Data(:,:);
+
+
+if fs_vicon > fs_tracker
+	% [p,q] = rat(fs_vicon / fs_tracker)
+    % tracker_dim = resample(tracker_dim,p,q);
+	[p,q] = rat(fs_tracker / fs_vicon);
+	% resample vicon to tracker frequency
+	vicon_data_new = resample(ts_extracted.Data,p,q);
+	tracker_data_new = tracker_data_extracted;
+else
+	% [p,q] = rat(fs_tracker / fs_vicon)
+    % vicon_dim = resample(vicon_dim,p,q);
+	[p,q] = rat(fs_vicon / fs_tracker);
+	tracker_data_new = resample(tracker_data_extracted,p,q);
+	vicon_data_new = ts_extracted.Data(:,:);
+end
+
 
 if lagDiff > 0
     if tracker_data_shifted == 1
