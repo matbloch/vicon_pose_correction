@@ -333,7 +333,7 @@ else
 end
 
 %{
-xcorr normalizes the maximal value of the correlation (the value at zero) to 1
+'coeff' normalizes the maximal value of the correlation (the value at zero) to 1
 xcorr(x,y) returns the cross-correlation of two discrete-time sequences, x and y. 
 Cross-correlation measures the similarity between x and shifted (lagged) copies of y as a function of the lag. 
 If x and y have different lengths, the function appends zeros at the end of the shorter 
@@ -349,7 +349,18 @@ corrcoef: same as xcorr, subtracts mean
 [acormax,I] = max(abs(acor));
 lagDiff = lag(I)
 
-
+f = figure; % new figure window
+set(f,'name','Signal Cross-correlation','numbertitle','off')
+plot(lag, acor);
+hold on;
+% draw maximum
+plot(lag(I), acormax, 'r*');
+line([lag(I) lag(I)], get(gca,'ylim'), 'Color', 'r');
+legend('Cross-covariance', 'Maximum Cross-covariance', sprintf('Timeshift: %s',num2str(lag(I))));
+xlabel('Lag [samples]');
+ylabel('Normalized Cross-correlation [-]');
+title('Signal Cross-correlation');
+hold off;
 %{
 
 % plot cross correlation
@@ -414,7 +425,7 @@ plot(sorig, first_clr)
 plot(salign, second_clr)
 % findpeaks(salign)
 xlim([0 mx+1])
-title('Prealigned signals')
+title('Aligned signals')
 ylabel('Z-Axis [m]');
 xlabel('Time')
 legend(orig,aligned,'Location','northwest')
