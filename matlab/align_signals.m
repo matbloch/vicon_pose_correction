@@ -607,7 +607,6 @@ end
 %% =============================================
 %%      maximum alignment
 
-
 % selection_ok = 0;
 % while selection_ok ~= 1
 %     
@@ -664,42 +663,5 @@ end
 %     end
 % 
 % end
-
-
-
-%% ------------
-% 
-% 
-% [x1,x2] = alignsignals(vicon_dim,tracker_dim);
-% 
-% subplot(2,1,1)
-% stem(x1)
-% xlim([0 mx+1])
-% 
-% subplot(2,1,2)
-% stem(x2,'*')
-% xlim([0 mx+1])
-
-%% =============================================
-%%      save data
-% 
-% filename = ['aligned_signals_',datestr(now, 'yyddmm-HHMMSS'),'.csv'];
-% 
-% min_index = min([numel(sorig),numel(salign)]);
-% fid=fopen(filename,'wt');
-% fprintf(fid,'%s,','Vicon');
-% fprintf(fid,'%s,','Pose estimation');
-% fclose(fid);
-% 
-% % vicon first, then pose estimation
-% if strcmp(first,'Vicon') == 1
-%     dlmwrite (filename, [sorig(1:min_index,:),salign(1:min_index,:)], '-append');
-% else
-%     dlmwrite (filename, [salign(1:min_index,:), sorig(1:min_index,:)], '-append');
-% end
-% 
-% fprintf('saving aligned results to: "%s"\n', filename);
-% 
-% 
 
 
