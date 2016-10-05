@@ -240,7 +240,7 @@ end
 %%	vicon_ts_alignment_roi
 %% =============================================
 
-if ~exist('start_time', 'var') || ~exist('end_time', 'var')
+if ~exist('start_time_vicon', 'var') || ~exist('end_time_vicon', 'var')
     selection_ok = 0;
 
     % extract the alignment roi
