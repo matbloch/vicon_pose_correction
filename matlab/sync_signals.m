@@ -34,13 +34,13 @@ clc;
 %%      select files
 
 % load the rosbag
-if ~exist(vicon_file, 'file')
+if ~exist('vicon_file', 'var')
     [filename,filepath] = uigetfile('*.bag','Select the ROS .bag file with the Vicon pose measurements');
     vicon_file = [filepath,filename];
 end
-% load pose logs
 
-if ~exist(poseEstimationFile, 'file')
+% load pose logs
+if ~exist('poseEstimationFile', 'var')
     [filename,filepath] = uigetfile('*.csv','Select the pose estimations');
     poseEstimationFile = [filepath,filename];
 end
