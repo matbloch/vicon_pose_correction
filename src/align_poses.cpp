@@ -30,6 +30,7 @@ DEFINE_string(ds_vicon, "", "path to vicon dataset");
 DEFINE_string(output, "", "output filename (measured pose aligned to vicon data)");
 DEFINE_double(scaling_factor, 1.0, "scaling factor of the measurements");
 DEFINE_bool(fake_tracker_readings, false, "fake tracker readings");
+DEFINE_string(offsets, "", "world and camera offsets output file");
 
 //#define CAM_OFFSET_ONLY
 
@@ -233,6 +234,21 @@ public:
 		return current_items_[col];
 	}
 
+	void GetPose(Eigen::Isometry3d pose){
+
+		pose.setIdentity();
+		Eigen::Vector3d pos(GetVal(0),GetVal(1),GetVal(2));
+		Eigen::AngleAxisd rot;
+
+		rot = Eigen::AngleAxisd(
+				GetVal(6), // angle
+				Eigen::Vector3d(GetVal(3),GetVal(4),GetVal(5)).normalized()	// direction
+				);
+		pos = -rot.matrix().transpose() * pos;
+		pose.fromPositionOrientationScale(pos, rot.inverse(), Eigen::Vector3d::Ones());
+
+	}
+
 	~CSVParser(){
 		filehandle_->close();
 		delete filehandle_;
@@ -246,6 +262,73 @@ private:
 
 	std::ifstream* filehandle_;
 
+};
+
+
+class CSVWriter {
+public:
+	CSVWriter(std::string filename) :filename_(filename), col_nr(0), line_nr(0) {
+		filehandle_ = new std::ofstream();
+		filehandle_->open(filename);
+	}
+	CSVWriter() :filehandle_(nullptr), filename_(""), col_nr(0), line_nr(0) {
+	}
+	void startNewRow() {
+		line_nr++;
+		col_nr = 0;
+		*filehandle_ << "\n";
+	}
+	template<class T> void addEntry(T val) {
+		if (col_nr > 0) {
+			// add new column
+			*filehandle_ << ",";
+		}
+		*filehandle_ << val;
+		col_nr++;
+	}
+	~CSVWriter() {
+		filehandle_->close();
+	}
+	void changeFile(std::string filename) {
+		filehandle_->close();
+		delete(filehandle_);
+		filehandle_ = new std::ofstream();
+		filehandle_->open(filename);
+		filename_ = filename;
+	}
+
+	template<class T> void addPose(Eigen::Isometry3d pose) {
+
+		Eigen::Vector3d pos;
+		Eigen::AngleAxisd rot;
+		Eigen::AngleAxis<double> aa;
+		Eigen::Vector3d outputAngles;
+		// reconstruct
+		pos = pose.inverse(Eigen::Isometry).translation();
+
+		Eigen::IOFormat CleanFmt(4, 0, ", ", "\n", "[", "]");
+		//std::cout << "position in world frame: " << std::endl << pos.format(CleanFmt) << std::endl;
+
+		addEntry<T>(pos[0]);
+		addEntry<T>(pos[1]);
+		addEntry<T>(pos[2]);
+
+		// axis angle
+		aa.fromRotationMatrix(pose.linear().transpose());
+		outputAngles = aa.axis().normalized();
+
+		// write
+		addEntry<double>(outputAngles[0]);
+		addEntry<double>(outputAngles[1]);
+		addEntry<double>(outputAngles[2]);
+		addEntry<double>(aa.angle());
+	}
+
+private:
+	std::string filename_;
+	std::ofstream* filehandle_;
+	int col_nr;
+	int line_nr;
 };
 
 std::vector<Eigen::Isometry3d> vicon_poses;
@@ -278,8 +361,8 @@ void setTrackerDataToWorld(Eigen::Isometry3d &pose) {
 	Eigen::Isometry3d offset;
 	offset.setIdentity();
 	// map offset
-	Eigen::Vector3d pos(50, -60, 0);
-	Eigen::AngleAxisd rotation = Eigen::AngleAxisd(-75.0*M_PI / 180.0, Eigen::Vector3d(0, 0, 1));
+	Eigen::Vector3d pos(0, 0, 0);
+	Eigen::AngleAxisd rotation = Eigen::AngleAxisd(0.0*M_PI / 180.0, Eigen::Vector3d(0, 0, 1));
 	offset.fromPositionOrientationScale(-rotation.inverse().toRotationMatrix()*pos, rotation.inverse(), Eigen::Vector3d::Ones());
 	pose = pose * offset;
 }
@@ -445,7 +528,7 @@ int main (int argc, char** argv) {
 
 	// pre-align poses
 	for(size_t i=0;i<vicon_poses.size();i++){
-		setViconDataToWorld(vicon_poses[i]);
+		//setViconDataToWorld(vicon_poses[i]);
 		setTrackerDataToWorld(measured_poses[i]);
 	}
 
@@ -525,6 +608,16 @@ int main (int argc, char** argv) {
       myfile << "\n";
 		}
     myfile.close();
+
+
+
+    if(FLAGS_offsets != ""){
+        CSVWriter out(FLAGS_offsets);
+        out.addPose<double>(world_offset);
+        out.startNewRow();
+        out.addPose<double>(cam_offset);
+    }
+
     std::cout << "vicon data and aligned measured poses have been saved to file: " << filename << std::endl;
 	}
   return 0;
